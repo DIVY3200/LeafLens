@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LeafLens · Plant Disease Detection</title>
+  <meta name="description" content="Snap a photo of a leaf and get an instant AI diagnosis, with treatment and prevention tips.">
+  <meta name="theme-color" content="#f3f6ee">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-leaf" viewBox="0 0 32 32"><path fill="currentColor" d="M27.5 4.5C15 4.6 5.5 10.6 5.5 21c0 2 .4 3.8 1.2 5.3C8.5 21 12.8 16.4 19 12.8c-5 4.6-8.3 9.2-9.8 14.4 1.5.5 3.1.8 4.8.8 9.2 0 13.5-8.2 13.5-23.5z"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.2"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></symbol>
+    <symbol id="i-switch" viewBox="0 0 24 24"><path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/><path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5"/><circle cx="12" cy="12" r="3"/><path d="m18 22-3-3 3-3"/><path d="m6 2 3 3-3 3"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-focus" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-retake" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+  </svg>
+
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="#top" aria-label="LeafLens home">
+        <span class="brand-mark"><svg><use href="#i-leaf"/></svg></span>
+        LeafLens
+      </a>
+      <nav class="nav">
+        <a href="#scan">Scan</a>
+        <a href="#history">History</a>
+        <a href="#plants">Plants</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero wrap">
+      <div class="hero-copy">
+        <p class="eyebrow">AI plant health check</p>
+        <h1>Spot leaf diseases <em>before</em> they spread.</h1>
+        <p class="lede">Point your camera at a leaf or upload a photo. A neural network trained on {{ trained_on }} photos recognises {{ class_count }} conditions across {{ plants|length }} crops in about a second and tells you what to do next.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#scan" id="hero-camera"><svg class="ico"><use href="#i-camera"/></svg>Open camera</a>
+          <a class="btn btn-ghost" href="#scan" id="hero-upload"><svg class="ico"><use href="#i-upload"/></svg>Upload a photo</a>
+        </div>
+        <dl class="stats">
+          <div><dt>{{ class_count }}</dt><dd>conditions</dd></div>
+          <div><dt>{{ plants|length }}</dt><dd>crops</dd></div>
+          {% if lab_accuracy %}<div title="Accuracy on {{ '{:,}'.format(lab_accuracy.n) }} lab photos of leaves the model never saw in training"><dt>{{ '%.1f'|format(lab_accuracy.accuracy * 100) }}%</dt><dd>on unseen lab photos</dd></div>{% endif %}
+          {% if field_accuracy %}<div title="Accuracy on {{ '{:,}'.format(field_accuracy.n) }} leaves photographed in real fields (FieldPlant)"><dt>{{ '%.1f'|format(field_accuracy.accuracy * 100) }}%</dt><dd>on real field photos</dd></div>{% endif %}
+        </dl>
+      </div>
+      <figure class="hero-art">
+        <img src="{{ url_for('static', filename='img/hero.jpeg') }}" alt="Leaves covered in orange rust spots" width="576" height="360">
+        <figcaption><span class="dot dot-disease"></span>Rust spots like these are what LeafLens looks for</figcaption>
+      </figure>
+    </section>
+
+    <section id="scan" class="scan wrap">
+      <div class="card scanner">
+        <div class="tabs" role="tablist" aria-label="Choose input">
+          <button class="tab" role="tab" id="tab-camera" aria-controls="panel-camera" aria-selected="true">
+            <svg class="ico"><use href="#i-camera"/></svg>Camera
+          </button>
+          <button class="tab" role="tab" id="tab-upload" aria-controls="panel-upload" aria-selected="false">
+            <svg class="ico"><use href="#i-upload"/></svg>Upload
+          </button>
+        </div>
+
+        <div class="panel" id="panel-camera" role="tabpanel" aria-labelledby="tab-camera">
+          <div class="viewfinder" id="viewfinder">
+            <video id="video" playsinline muted></video>
+            <img class="snapshot" id="snapshot" alt="The picture you took" hidden>
+            <div class="guide" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <div class="live-pill" id="live-pill" hidden></div>
+            <button class="viewfinder-close" id="close-camera" type="button" aria-label="Close camera" title="Close camera" hidden>
+              <svg class="ico"><use href="#i-x"/></svg>
+            </button>
+            <div class="cam-overlay" id="cam-overlay">
+              <svg class="cam-overlay-icon"><use href="#i-camera"/></svg>
+              <p class="cam-overlay-title" id="cam-title">Take a picture of a leaf</p>
+              <p class="cam-overlay-text" id="cam-text">Open the camera, fill the square with a single leaf, then press Take picture.</p>
+              <button class="btn btn-primary" id="start-camera" type="button"><svg class="ico"><use href="#i-camera"/></svg>Open camera</button>
+              <button class="btn btn-light" id="native-camera" type="button" hidden>Use my phone's camera app</button>
+            </div>
+          </div>
+          <div class="cam-controls">
+            <label class="switch" title="Analyse the camera feed continuously">
+              <input type="checkbox" id="live-toggle" disabled>
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+              <span class="switch-label">Live detect</span>
+            </label>
+            <div class="capture">
+              <button class="shutter" id="shutter" type="button" aria-labelledby="shutter-label" disabled><span></span></button>
+              <span class="capture-label" id="shutter-label">Take picture</span>
+              <button class="btn btn-primary" id="retake" type="button" hidden><svg class="ico"><use href="#i-retake"/></svg>Retake</button>
+            </div>
+            <button class="icon-btn" id="flip-camera" type="button" aria-label="Switch camera" title="Switch camera" disabled>
+              <svg class="ico"><use href="#i-switch"/></svg>
+            </button>
+          </div>
+          <button class="alt-capture" id="alt-capture" type="button" hidden>
+            <svg class="ico"><use href="#i-camera"/></svg>Or take the picture with your phone's camera app
+          </button>
+        </div>
+
+        <div class="panel" id="panel-upload" role="tabpanel" aria-labelledby="tab-upload" hidden>
+          <label class="dropzone" id="dropzone">
+            <input type="file" id="file-input" accept="image/*">
+            <span class="dropzone-icon"><svg class="ico"><use href="#i-upload"/></svg></span>
+            <span class="dropzone-title">Drop a leaf photo here</span>
+            <span class="dropzone-text">or <u>browse your files</u>. You can also paste an image with Ctrl+V.</span>
+          </label>
+          <input type="file" id="native-input" accept="image/*" capture="environment" hidden>
+        </div>
+
+        <ul class="tips">
+          <li><svg class="ico"><use href="#i-leaf"/></svg>One leaf, filling the frame</li>
+          <li><svg class="ico"><use href="#i-sun"/></svg>Even daylight, no harsh shadows</li>
+          <li><svg class="ico"><use href="#i-focus"/></svg>Hold steady so the spots are sharp</li>
+        </ul>
+      </div>
+
+      <div class="card result" id="result" aria-live="polite">
+        <div class="result-empty" id="result-empty">
+          <div class="empty-art" aria-hidden="true">
+            <svg><use href="#i-leaf"/></svg>
+          </div>
+          <h2>Your diagnosis appears here</h2>
+          <p>Take a photo or upload one. You'll see the most likely condition, how sure the model is, and practical steps to treat and prevent it.</p>
+        </div>
+
+        <div class="result-loading" id="result-loading" hidden>
+          <div class="scan-anim" aria-hidden="true"><img id="loading-img" alt=""><span class="scan-line"></span></div>
+          <p>Examining the leaf…</p>
+        </div>
+
+        <div class="result-body" id="result-body" hidden></div>
+      </div>
+    </section>
+
+    <section id="history" class="history wrap">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Saved on this device</p>
+          <h2>Recent scans</h2>
+        </div>
+        <button class="btn btn-text" id="clear-history" type="button" hidden><svg class="ico"><use href="#i-trash"/></svg>Clear</button>
+      </div>
+      <p class="history-empty" id="history-empty">No scans yet. Your last 12 results will be kept here so you can track a plant over time.</p>
+      <ul class="history-grid" id="history-grid"></ul>
+    </section>
+
+    <section id="plants" class="plants wrap">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Coverage</p>
+          <h2>What LeafLens can recognise</h2>
+        </div>
+      </div>
+      <p class="section-lede">The model was trained on the {{ datasets }} {{ 'datasets' if ' and ' in datasets else 'dataset' }}, covering {{ plants|length }} crops. Photos of other plants will still get an answer, but it won't be meaningful.</p>
+      <div class="plant-grid">
+        {% for plant in plants %}
+        <article class="plant-card">
+          <h3>{{ plant.name }}</h3>
+          <ul>
+            {% for condition in plant.conditions %}
+            <li class="{{ 'is-healthy' if condition.healthy else 'is-disease' }}">{{ condition.name }}</li>
+            {% endfor %}
+          </ul>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <p class="brand brand-small"><span class="brand-mark"><svg><use href="#i-leaf"/></svg></span>LeafLens</p>
+      <p>AI-assisted guidance only. For serious or spreading outbreaks, confirm with a local agricultural extension service before treating.</p>
+      <p class="footer-meta"><svg class="ico"><use href="#i-layers"/></svg>Model: {{ model_name }} · TensorFlow · Flask</p>
+    </div>
+  </footer>
+
+  <template id="tpl-history-item">
+    <li>
+      <button class="history-item" type="button">
+        <img alt="">
+        <span class="history-text">
+          <span class="history-name"></span>
+          <span class="history-meta"></span>
+        </span>
+      </button>
+    </li>
+  </template>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</body>
+</html>
