@@ -33,3 +33,30 @@ def test_the_space_gets_the_app_and_its_own_readme(tmp_path):
     assert {"Dockerfile", "README.md", "app.py", "requirements-deploy.txt", "models/leaflens_mobilenetv2.keras"} <= set(files)
     assert not any("__pycache__" in f or f.startswith(("tests/", "Dataset/")) for f in files)
     assert "sdk: docker" in (tmp_path / "README.md").read_text(encoding="utf-8")
+
+
+class FakeHub:
+    def __init__(self, me=None, error=None):
+        self.me, self.error = me, error
+
+    def whoami(self):
+        if self.error:
+            raise self.error
+        return self.me
+
+
+def test_token_problems_are_explained_on_the_run_page(capsys, monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    with pytest.raises(SystemExit, match="rejected the HF_TOKEN"):
+        deploy_space.check_token(FakeHub(error=RuntimeError("401 Unauthorized")), "divy3200/leaflens")
+    assert "::error title=Deploy to Hugging Face failed::" in capsys.readouterr().out
+    with pytest.raises(SystemExit, match="belongs to 'someone-else'"):
+        deploy_space.check_token(FakeHub({"name": "someone-else"}), "divy3200/leaflens")
+    with pytest.raises(SystemExit, match="read-only"):
+        deploy_space.check_token(FakeHub({"name": "divy3200", "auth": {"accessToken": {"role": "read"}}}),
+                                 "divy3200/leaflens")
+
+
+def test_a_write_token_for_the_owner_passes():
+    me = {"name": "Divy3200", "orgs": [], "auth": {"accessToken": {"role": "write"}}}
+    deploy_space.check_token(FakeHub(me), "divy3200/leaflens")
