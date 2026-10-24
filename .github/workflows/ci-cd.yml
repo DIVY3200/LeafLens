@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: huggingface
-      url: https://huggingface.co/spaces/${{ vars.HF_SPACE }}
+      url: ${{ steps.upload.outputs.url }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -72,6 +72,7 @@ jobs:
       - name: Install the Hugging Face client
         run: pip install "huggingface_hub==2.*"
       - name: Upload the app to the Space
+        id: upload
         run: python deploy/deploy_space.py "$HF_SPACE" --message "Deploy ${GITHUB_SHA::7} from GitHub"
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}

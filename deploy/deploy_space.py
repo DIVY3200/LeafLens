@@ -10,6 +10,7 @@ app at https://huggingface.co/spaces/<your-username>/leaflens.
 """
 import argparse
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -28,6 +29,16 @@ FILES = [
 ]
 # Paths this script owns in the Space; anything there that is no longer in FILES gets removed.
 MANAGED = ["Dockerfile", "requirements-deploy.txt", "app.py", "plant_disease/**", "templates/**", "static/**", "models/**"]
+
+
+def space_id(value):
+    """'<user>/<space>' from that form or a pasted Space URL, e.g. https://huggingface.co/spaces/<user>/<space>."""
+    value = (value or "").strip().rstrip("/")
+    value = re.sub(r"^(https?://)?(www\.)?huggingface\.co/", "", value)
+    value = re.sub(r"^spaces/", "", value)
+    if not re.fullmatch(r"[\w.-]+/[\w.-]+", value):
+        sys.exit(f"HF_SPACE should look like <hf-username>/<space-name>, got {value!r}.")
+    return value
 
 
 def stage(folder):
@@ -51,13 +62,16 @@ def main():
     parser.add_argument("--message", default="Deploy from GitHub")
     parser.add_argument("--dry-run", action="store_true", help="only list the files that would be uploaded")
     args = parser.parse_args()
-    if not args.space or "/" not in args.space:
-        sys.exit("Give the Space as <username>/<space-name>, or set HF_SPACE.")
+    space = space_id(args.space)
+    url = f"https://huggingface.co/spaces/{space}"
+    if os.environ.get("GITHUB_OUTPUT"):  # lets the workflow link the deployment to the Space
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+            f.write(f"url={url}\n")
 
     with tempfile.TemporaryDirectory() as tmp:
         files = stage(Path(tmp))
         size = sum((Path(tmp) / f).stat().st_size for f in files) / 1e6
-        print(f"{len(files)} files ({size:.1f} MB) for https://huggingface.co/spaces/{args.space}")
+        print(f"{len(files)} files ({size:.1f} MB) for {url}")
         if args.dry_run:
             print("\n".join(f"  {f}" for f in files))
             return
@@ -68,10 +82,10 @@ def main():
         from huggingface_hub import HfApi
 
         api = HfApi(token=token)
-        api.create_repo(args.space, repo_type="space", space_sdk="docker", exist_ok=True)
-        api.upload_folder(folder_path=tmp, repo_id=args.space, repo_type="space",
+        api.create_repo(space, repo_type="space", space_sdk="docker", exist_ok=True)
+        api.upload_folder(folder_path=tmp, repo_id=space, repo_type="space",
                           commit_message=args.message, delete_patterns=MANAGED)
-        print(f"Uploaded. Hugging Face is now building the app: https://huggingface.co/spaces/{args.space}")
+        print(f"Uploaded. Hugging Face is now building the app: {url}")
 
 
 if __name__ == "__main__":
