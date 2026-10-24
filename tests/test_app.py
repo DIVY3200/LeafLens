@@ -50,3 +50,9 @@ def test_health_check_reports_the_model(client):
     assert body["model"] == "Tiny test model"
     assert body["classes"] == 3
     assert body["input_size"] == [32, 32]
+
+
+def test_health_check_reports_the_deployed_commit(client, monkeypatch):
+    assert client.get("/api/health").get_json()["commit"] is None
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "d17c005a1b2c3d4e5f60718293a4b5c6d7e8f901")
+    assert client.get("/api/health").get_json()["commit"] == "d17c005"

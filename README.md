@@ -4,6 +4,8 @@
 
 Point your phone or laptop camera at a leaf and LeafLens tells you what's wrong with it, how sure it is, and what to do about it.
 
+**Live demo: [leaflens-dsd1.onrender.com](https://leaflens-dsd1.onrender.com)** (free hosting: the first visit after a quiet spell takes about a minute to wake up).
+
 The project follows **Moupojou et al., "FieldPlant: A Dataset of Field Plant Images for Plant Disease Detection and Classification With Deep Learning"** (IEEE Access, 2023). That paper shows that models trained on lab photos (PlantVillage) fail on photos taken in real fields. LeafLens reproduces the finding and fixes it the way the paper suggests: an ImageNet-pretrained MobileNetV2 trained on lab **and** field photos. It is right on **86.1% of held-out field photos** (the original model: 12.8%) and **96.2% of held-out lab photos**.
 
 ![LeafLens analysing a tomato leaf with yellow leaf curl virus](docs/screenshot.jpg)
@@ -143,7 +145,7 @@ On a phone connected to the same Wi-Fi, open `https://<your-computer's-IP>:5000`
 
 Every push and pull request runs [the CI workflow](.github/workflows/ci-cd.yml) on GitHub Actions:
 
-1. **Lint and test.** `ruff` checks the code and `pytest` runs 88 tests: the web API (including bad and oversized uploads), phone-photo rotation, the leak-free splits, both FieldPlant download formats, the training helpers, the TensorFlow Lite export, and the shipped models against their cards. The tests use tiny stand-in models and generated photos, so they need neither the datasets nor a GPU.
+1. **Lint and test.** `ruff` checks the code and `pytest` runs 89 tests: the web API (including bad and oversized uploads), phone-photo rotation, the leak-free splits, both FieldPlant download formats, the training helpers, the TensorFlow Lite export, and the shipped models against their cards. The tests use tiny stand-in models and generated photos, so they need neither the datasets nor a GPU.
 2. **Build and smoke-test the Docker image.** The production container (gunicorn) must answer `/api/health`, diagnose a 12-megapixel photo, and stay under 400 MB of memory, so it keeps fitting Render's free 512 MB instance.
 3. **Deploy.** [Render](https://render.com) redeploys `main` once both checks pass (`autoDeployTrigger: checksPass` in [render.yaml](render.yaml)).
 

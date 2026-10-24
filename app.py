@@ -9,6 +9,7 @@ TensorFlow Lite export first, which needs no TensorFlow), and falls back to the 
 PlantVillage CNN otherwise.
 """
 import argparse
+import os
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
@@ -66,7 +67,8 @@ def create_app(model_path=None):
 
     @app.get("/api/health")
     def health():
-        return jsonify(status="ok", model=page["model_name"], file=model_path.name,
+        commit = os.environ.get("RENDER_GIT_COMMIT", "")[:7] or None  # set by Render: which commit is live
+        return jsonify(status="ok", model=page["model_name"], file=model_path.name, commit=commit,
                        classes=len(classifier.classes), input_size=classifier.image_size, metrics=metrics)
 
     @app.errorhandler(413)
