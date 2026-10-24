@@ -4,8 +4,9 @@ Run:  py -3.10 app.py                          -> http://localhost:5000
       py -3.10 app.py --host 0.0.0.0 --https   (use the live camera from a phone on the same Wi-Fi)
       py -3.10 app.py --model path/to/model.keras
 
-By default it uses the field-trained model from train_transfer.py when that exists, and
-falls back to the original PlantVillage CNN otherwise.
+By default it uses the field-trained model from train_transfer.py when that exists (its
+TensorFlow Lite export first, which needs no TensorFlow), and falls back to the original
+PlantVillage CNN otherwise.
 """
 import argparse
 from pathlib import Path
@@ -18,8 +19,9 @@ from plant_disease.knowledge import supported_plants
 
 ROOT = Path(__file__).resolve().parent
 MODEL_CHOICES = [
-    ROOT / "models" / "leaflens_mobilenetv2.keras",  # trained on PlantVillage + FieldPlant
-    ROOT / "trained_plant_disease_model.keras",      # original CNN, PlantVillage only
+    ROOT / "models" / "leaflens_mobilenetv2.tflite",  # trained on PlantVillage + FieldPlant, runs on LiteRT
+    ROOT / "models" / "leaflens_mobilenetv2.keras",   # the same model in Keras format
+    ROOT / "trained_plant_disease_model.keras",       # original CNN, PlantVillage only
 ]
 SOURCE_WORDS = {"PlantVillage": "lab", "FieldPlant": "field"}
 

@@ -1,5 +1,6 @@
 name: CI/CD
 
+# CI runs here. CD is Render's: it redeploys main once these checks pass (render.yaml).
 on:
   push:
     branches: [main]
@@ -41,39 +42,26 @@ jobs:
         run: docker build -t leaflens .
       - name: Start the app and wait for it to answer
         run: |
-          docker run -d --name leaflens -p 7860:7860 leaflens
+          docker run -d --name leaflens -p 10000:10000 leaflens
           for attempt in $(seq 1 60); do
-            if curl -sf http://localhost:7860/api/health; then exit 0; fi
+            if curl -sf http://localhost:10000/api/health; then exit 0; fi
             sleep 2
           done
           docker logs leaflens
           exit 1
       - name: Diagnose a photo through the running app
         run: |
-          docker exec leaflens python -c "from PIL import Image; Image.new('RGB', (300, 300), (60, 140, 60)).save('/tmp/leaf.jpg')"
+          docker exec leaflens python -c "from PIL import Image; Image.new('RGB', (3000, 4000), (60, 140, 60)).save('/tmp/leaf.jpg')"
           docker cp leaflens:/tmp/leaf.jpg leaf.jpg
-          curl -sf -F "image=@leaf.jpg" http://localhost:7860/api/predict | tee response.json
+          curl -sf -F "image=@leaf.jpg" http://localhost:10000/api/predict | tee response.json
           grep -q '"prediction"' response.json
-
-  deploy:
-    name: Deploy to Hugging Face Spaces
-    needs: docker
-    # Runs on pushes to main once the HF_SPACE variable is set (Settings > Secrets and variables > Actions).
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.HF_SPACE != ''
-    runs-on: ubuntu-latest
-    environment:
-      name: huggingface
-      url: ${{ steps.upload.outputs.url }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.10"
-      - name: Install the Hugging Face client
-        run: pip install "huggingface_hub==2.*"
-      - name: Upload the app to the Space
-        id: upload
-        run: python deploy/deploy_space.py "$HF_SPACE" --message "Deploy ${GITHUB_SHA::7} from GitHub"
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_SPACE: ${{ vars.HF_SPACE }}
+      - name: Check it fits Render's free 512 MB instance
+        run: |
+          usage=$(docker stats --no-stream --format '{{.MemUsage}}' leaflens | cut -d/ -f1)
+          echo "::notice title=Container memory::$usage after diagnosing a 12-megapixel photo (limit for this check: 400MiB)"
+          python3 -c "
+          import re, sys
+          value, unit = re.match(r'([\d.]+)\s*(\w+)', '$usage').groups()
+          mib = float(value) * {'KiB': 1 / 1024, 'MiB': 1, 'GiB': 1024}[unit]
+          sys.exit(f'Uses {mib:.0f} MiB; Render free instances have 512 MB') if mib > 400 else None
+          "

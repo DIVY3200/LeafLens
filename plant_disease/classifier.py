@@ -1,4 +1,10 @@
-"""Load a trained Keras model once and classify leaf photos with it."""
+"""Load a trained model once and classify leaf photos with it.
+
+Two model formats work:
+  .keras   the training format; needs TensorFlow
+  .tflite  the same network converted by export_tflite.py; needs only the small LiteRT
+           runtime, so the deployed server fits a free 512 MB instance
+"""
 import json
 import os
 import threading
@@ -9,15 +15,6 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 import numpy as np
 from PIL import Image, ImageOps
 
-try:
-    import tensorflow as tf
-except ImportError as exc:  # most often: running on a Python version TensorFlow doesn't support yet
-    raise ImportError(
-        "TensorFlow is not installed for this Python interpreter. TensorFlow supports "
-        "Python 3.9-3.13, so start the app with one of those, e.g. `py -3.10 app.py`."
-    ) from exc
-
-from . import layers  # noqa: F401  registers custom layers before models are loaded
 from .knowledge import PLANTVILLAGE_CLASSES, describe
 
 # Below this top-1 probability the photo is reported as "uncertain". Chosen from
@@ -39,6 +36,72 @@ def model_card(model_path):
         return {}
 
 
+def resize_bilinear(pixels, size):
+    """Resize an HxWx3 float array exactly like tf.image.resize(..., "bilinear"), which training used.
+
+    Half-pixel centres, no antialiasing; plain NumPy so the server doesn't need TensorFlow.
+    """
+    def weights(in_size, out_size):
+        position = (np.arange(out_size, dtype=np.float32) + 0.5) * np.float32(in_size / out_size) - 0.5
+        floor = np.floor(position)
+        lower = np.maximum(floor, 0).astype(np.int64)
+        upper = np.minimum(np.ceil(position), in_size - 1).astype(np.int64)
+        return lower, upper, position - floor
+
+    top, bottom, dy = weights(pixels.shape[0], size[0])
+    left, right, dx = weights(pixels.shape[1], size[1])
+    dx = dx[None, :, None]
+    upper = pixels[top][:, left] + (pixels[top][:, right] - pixels[top][:, left]) * dx
+    lower = pixels[bottom][:, left] + (pixels[bottom][:, right] - pixels[bottom][:, left]) * dx
+    return upper + (lower - upper) * dy[:, None, None]
+
+
+class _KerasModel:
+    def __init__(self, path):
+        try:
+            import tensorflow as tf
+        except ImportError as exc:  # most often: a Python version TensorFlow doesn't support yet
+            raise ImportError(
+                "Loading a .keras model needs TensorFlow, which is not installed for this Python interpreter. "
+                "TensorFlow supports Python 3.9-3.13, e.g. `py -3.10 app.py`; or use the .tflite model."
+            ) from exc
+        from . import layers  # noqa: F401  registers custom layers before the model is loaded
+
+        model = tf.keras.models.load_model(path)
+        self.input_size = tuple(model.input_shape[1:3])
+        self.num_classes = model.output_shape[-1]
+        # Compiled once: calling a deep model like MobileNetV2 eagerly costs ~5x more per photo.
+        self._forward = tf.function(lambda batch: model(batch, training=False),
+                                    input_signature=[tf.TensorSpec([None, *self.input_size, 3], tf.float32)])
+
+    def __call__(self, batch):
+        return self._forward(batch).numpy()
+
+
+class _LiteModel:
+    def __init__(self, path):
+        try:
+            from ai_edge_litert.interpreter import Interpreter
+        except ImportError:  # TensorFlow ships the same interpreter
+            import tensorflow as tf
+            Interpreter = tf.lite.Interpreter
+
+        self._interpreter = Interpreter(model_path=path)
+        self._interpreter.allocate_tensors()
+        self._input = self._interpreter.get_input_details()[0]
+        self._output = self._interpreter.get_output_details()[0]
+        self.input_size = tuple(int(v) for v in self._input["shape"][1:3])
+        self.num_classes = int(self._output["shape"][-1])
+
+    def __call__(self, batch):
+        results = []
+        for image in batch:  # the converted model takes one image at a time
+            self._interpreter.set_tensor(self._input["index"], np.ascontiguousarray(image[None], np.float32))
+            self._interpreter.invoke()
+            results.append(self._interpreter.get_tensor(self._output["index"])[0].copy())
+        return np.array(results)
+
+
 def _public(label, confidence):
     entry = describe(label)
     return {
@@ -52,25 +115,23 @@ def _public(label, confidence):
 
 class PlantDiseaseClassifier:
     def __init__(self, model_path, threshold=CONFIDENCE_THRESHOLD):
-        self.model = tf.keras.models.load_model(model_path)
+        model_path = str(model_path)
+        self._model = _LiteModel(model_path) if model_path.endswith(".tflite") else _KerasModel(model_path)
         self.card = model_card(model_path)
         self.classes = self.card.get("classes") or PLANTVILLAGE_CLASSES  # models without a card: the original 38
-        self.image_size = tuple(self.model.input_shape[1:3])
+        self.image_size = self._model.input_size
         self.threshold = threshold
         self._lock = threading.Lock()
 
-        outputs = self.model.output_shape[-1]
-        if outputs != len(self.classes):
-            raise ValueError(f"{model_path} predicts {outputs} classes but its class list has {len(self.classes)}")
+        if self._model.num_classes != len(self.classes):
+            raise ValueError(f"{model_path} predicts {self._model.num_classes} classes "
+                             f"but its class list has {len(self.classes)}")
 
-        # Compiled once: calling a deep model like MobileNetV2 eagerly costs ~5x more per photo.
-        self._forward = tf.function(lambda batch: self.model(batch, training=False),
-                                    input_signature=[tf.TensorSpec([None, *self.image_size, 3], tf.float32)])
         self._run(np.zeros((1, *self.image_size, 3), np.float32))  # warm-up so the first real request is fast
 
     def _run(self, batch):
         with self._lock:
-            return self._forward(batch).numpy()
+            return self._model(batch)
 
     def preprocess(self, source):
         """Open an image (path or file object) and turn it into the model's input array."""
@@ -85,9 +146,8 @@ class PlantDiseaseClassifier:
         if side != SOURCE_SIZE:
             image = image.resize((SOURCE_SIZE, SOURCE_SIZE), Image.LANCZOS)
 
-        # Same resize the training pipelines apply (bilinear, raw 0-255 values; models rescale internally).
-        pixels = np.asarray(image, dtype=np.float32)
-        return tf.image.resize(pixels, self.image_size, method="bilinear").numpy()
+        # Raw 0-255 values; the models rescale internally.
+        return resize_bilinear(np.asarray(image, dtype=np.float32), self.image_size)
 
     def predict(self, source, top_k=3):
         pixels = self.preprocess(source)

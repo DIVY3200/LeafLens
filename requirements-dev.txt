@@ -1,4 +1,8 @@
-# CI and local checks: the app's pinned runtime plus the test and lint tools.
+# CI and local checks: the deployed app's runtime, plus TensorFlow (the .keras models,
+# training code and conversion tests) and the test and lint tools. TensorFlow and Keras are
+# pinned to the versions the bundled models were saved with.
 -r requirements-deploy.txt
+tensorflow-cpu==2.17.0
+keras==3.5.0
 pytest==8.*
 ruff==0.17.*

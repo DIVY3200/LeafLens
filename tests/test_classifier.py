@@ -4,7 +4,7 @@ import shutil
 import numpy as np
 import pytest
 
-from plant_disease.classifier import CONFIDENCE_THRESHOLD, PlantDiseaseClassifier, model_card
+from plant_disease.classifier import CONFIDENCE_THRESHOLD, PlantDiseaseClassifier, model_card, resize_bilinear
 from plant_disease.knowledge import PLANTVILLAGE_CLASSES
 
 from conftest import CARD_CLASSES
@@ -59,3 +59,21 @@ def test_predictions_are_ranked_and_come_with_a_guide(classifier, photo):
     assert set(prediction["info"]) == {"type", "cause", "summary", "symptoms", "treatment", "prevention"}
     assert result["uncertain"] == (prediction["confidence"] < CONFIDENCE_THRESHOLD)
     assert result["inference_ms"] >= 0
+
+
+def test_numpy_resize_matches_the_tensorflow_resize_used_in_training():
+    tf = pytest.importorskip("tensorflow")
+    pixels = np.random.default_rng(0).uniform(0, 255, (256, 256, 3)).astype(np.float32)
+    for size in [(224, 224), (128, 128), (299, 299), (32, 32)]:
+        expected = tf.image.resize(pixels, size, method="bilinear").numpy()
+        np.testing.assert_allclose(resize_bilinear(pixels, size), expected, atol=1e-3)
+
+
+def test_the_tflite_export_gives_the_same_answers(carded_model, lite_model, photo):
+    lite = PlantDiseaseClassifier(lite_model)
+    assert lite.classes == CARD_CLASSES  # the .json card is shared by file name
+    assert lite.image_size == (32, 32)
+    expected = PlantDiseaseClassifier(carded_model).predict(photo(), top_k=3)
+    actual = lite.predict(photo(), top_k=3)
+    assert {m["label"]: m["confidence"] for m in actual["top"]} == pytest.approx(
+        {m["label"]: m["confidence"] for m in expected["top"]}, abs=1e-3)

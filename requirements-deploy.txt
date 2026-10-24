@@ -1,7 +1,6 @@
-# What the web app needs in production (the Docker image / Hugging Face Space) and in CI.
-# TensorFlow and Keras are pinned to the versions the bundled models were saved with.
-tensorflow-cpu==2.17.0
-keras==3.5.0
+# What the deployed web app needs (the Docker image Render runs). No TensorFlow: the server
+# runs the TensorFlow Lite export of the model on LiteRT, which needs ~80 MB of memory.
+ai-edge-litert==2.3.0
 numpy==1.26.*
 pillow>=10.3,<12
 flask==3.1.*

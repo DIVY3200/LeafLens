@@ -6,7 +6,6 @@ data/
 reports/
 docs/
 tests/
-deploy/
 **/__pycache__/
 *.pdf
 trained_plant_disease_model.*

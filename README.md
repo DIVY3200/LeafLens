@@ -84,7 +84,8 @@ TensorFlow supports **Python 3.9–3.13**. On Windows with several versions inst
 ```bash
 python prepare_fieldplant.py Dataset/FieldPlant     # ~1 min: 5,156 photos -> data/fieldplant
 python train_transfer.py --pv-per-class 400         # MobileNetV2 on lab + field photos
-python app.py                                       # now uses models/leaflens_mobilenetv2.keras
+python export_tflite.py                             # TensorFlow Lite copy for the server, checked to give the same answers
+python app.py                                       # now uses models/leaflens_mobilenetv2.tflite
 ```
 
 `train_transfer.py` saves the model, a JSON card (classes and test metrics, shown by the app), learning curves, a classification report and a FieldPlant confusion matrix in `reports/<model>/`. With `--pv-per-class 400` an epoch is about 19,000 images; on an 8-core laptop CPU each took 6–12 minutes, about 2.5 hours for the 19 epochs of the included model.
@@ -140,11 +141,13 @@ On a phone connected to the same Wi-Fi, open `https://<your-computer's-IP>:5000`
 
 ## CI/CD
 
-Every push and pull request runs [the CI/CD workflow](.github/workflows/ci-cd.yml) on GitHub Actions:
+Every push and pull request runs [the CI workflow](.github/workflows/ci-cd.yml) on GitHub Actions:
 
-1. **Lint and test.** `ruff` checks the code and `pytest` runs 83 tests: the web API (including bad and oversized uploads), phone-photo rotation, the leak-free splits, both FieldPlant download formats, the training helpers, and both shipped models against their cards. The tests use tiny stand-in models and generated photos, so they need neither the datasets nor a GPU.
-2. **Build and smoke-test the Docker image.** The app is started in its production container (gunicorn) and must answer `/api/health` and diagnose a photo.
-3. **Deploy.** On pushes to `main`, the app is published to a Hugging Face Space, which serves it over HTTPS so the live camera works on any phone.
+1. **Lint and test.** `ruff` checks the code and `pytest` runs 88 tests: the web API (including bad and oversized uploads), phone-photo rotation, the leak-free splits, both FieldPlant download formats, the training helpers, the TensorFlow Lite export, and the shipped models against their cards. The tests use tiny stand-in models and generated photos, so they need neither the datasets nor a GPU.
+2. **Build and smoke-test the Docker image.** The production container (gunicorn) must answer `/api/health`, diagnose a 12-megapixel photo, and stay under 400 MB of memory, so it keeps fitting Render's free 512 MB instance.
+3. **Deploy.** [Render](https://render.com) redeploys `main` once both checks pass (`autoDeployTrigger: checksPass` in [render.yaml](render.yaml)).
+
+The deployed server runs the TensorFlow Lite export of the model on [LiteRT](https://pypi.org/project/ai-edge-litert/) instead of full TensorFlow: about 80 MB of memory instead of 430 MB and a 0.5-second start, with the same answers (tested on 93 real photos and in CI).
 
 Run the same checks locally:
 
@@ -158,17 +161,16 @@ Run the production container locally (needs Docker):
 
 ```bash
 docker build -t leaflens .
-docker run -p 7860:7860 leaflens         # http://localhost:7860
+docker run -p 10000:10000 leaflens      # http://localhost:10000
 ```
 
-To turn on deployment, create a Hugging Face access token with write permission, then in the GitHub repository open **Settings > Secrets and variables > Actions** and add:
+### Deploy your own copy on Render
 
-| Kind | Name | Value |
-|---|---|---|
-| Secret | `HF_TOKEN` | the Hugging Face token |
-| Variable | `HF_SPACE` | `<your-hf-username>/leaflens` |
+1. Sign up at [render.com](https://render.com) with your GitHub account (the free plan needs no card).
+2. In the Render Dashboard choose **New > Blueprint**, connect GitHub and pick this repository. Render reads `render.yaml` and proposes a free web service called `leaflens`.
+3. Click **Apply**. The first build takes a few minutes; the app then lives at `https://leaflens-<random>.onrender.com`.
 
-The first deploy creates the Space. Until `HF_SPACE` is set, the deploy job is skipped and CI still runs. `python deploy/deploy_space.py <user>/leaflens --dry-run` lists what gets uploaded.
+Free Render services sleep after 15 minutes without visitors, so the first visit after a break takes about a minute.
 
 ## How it works
 
@@ -221,11 +223,12 @@ templates/, static/            the web page, styles and camera/upload logic
 train.py                       the original CNN training script (PlantVillage only)
 train_plant_diseases.py        quick visual check of the original model on one image
 trained_plant_disease_model.keras / .json    original CNN and its card
-models/leaflens_mobilenetv2.keras / .json   the field-trained MobileNetV2 the app uses, and its card
+models/leaflens_mobilenetv2.keras / .tflite / .json   the field-trained MobileNetV2 (Keras and TensorFlow Lite) and its card
 reports/<model>/               learning curves, classification report, FieldPlant confusion matrix
 tests/                         pytest suite (runs in CI)
-Dockerfile, requirements-deploy.txt          production container for the web app
-deploy/                        Hugging Face Space README and upload script (used by CD)
+export_tflite.py               converts a .keras model to TensorFlow Lite for the server
+Dockerfile, requirements-deploy.txt          production container for the web app (LiteRT, no TensorFlow)
+render.yaml                    Render Blueprint: free web service, deployed after CI passes
 .github/workflows/ci-cd.yml    lint, test, Docker smoke test and deploy
 ```
 

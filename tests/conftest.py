@@ -47,17 +47,32 @@ def carded_model(tmp_path_factory):
     return str(folder / "carded.keras")
 
 
+@pytest.fixture(scope="session")
+def lite_model(carded_model, tmp_path_factory):
+    """The carded model converted by export_tflite.py, sharing its card like the shipped model does."""
+    import shutil
+
+    import keras
+
+    from export_tflite import convert
+
+    folder = tmp_path_factory.mktemp("lite")
+    (folder / "carded.tflite").write_bytes(convert(keras.models.load_model(carded_model)))
+    shutil.copy(carded_model.replace(".keras", ".json"), folder / "carded.json")
+    return str(folder / "carded.tflite")
+
+
 @pytest.fixture
 def photo(tmp_path):
     """Make a JPEG: random noise by default, or left half dark / right half bright with split=True."""
 
-    def make(name="leaf.jpg", size=(300, 200), split=False, exif_orientation=None):
+    def make(name="leaf.jpg", size=(300, 200), split=False, exif_orientation=None, seed=0):
         width, height = size
         if split:
             pixels = np.zeros((height, width, 3), np.uint8)
             pixels[:, width // 2:] = 255
         else:
-            pixels = np.random.default_rng(0).integers(0, 256, (height, width, 3), dtype=np.uint8)
+            pixels = np.random.default_rng(seed).integers(0, 256, (height, width, 3), dtype=np.uint8)
         path = tmp_path / name
         exif = Image.Exif()
         if exif_orientation:
