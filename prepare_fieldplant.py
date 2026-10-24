@@ -87,7 +87,7 @@ def read_class_names(root):
         import yaml
         names = yaml.safe_load(text)["names"]
     except ImportError:  # Roboflow writes names as a one-line list
-        line = next(l for l in text.splitlines() if l.startswith("names:"))
+        line = next(row for row in text.splitlines() if row.startswith("names:"))
         names = ast.literal_eval(line.split(":", 1)[1].strip())
     return [names[i] for i in sorted(names)] if isinstance(names, dict) else list(names)
 

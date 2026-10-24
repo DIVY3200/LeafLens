@@ -1,0 +1,8 @@
+# What the web app needs in production (the Docker image / Hugging Face Space) and in CI.
+# TensorFlow and Keras are pinned to the versions the bundled models were saved with.
+tensorflow-cpu==2.17.0
+keras==3.5.0
+numpy==1.26.*
+pillow>=10.3,<12
+flask==3.1.*
+gunicorn==23.*

@@ -1,0 +1,13 @@
+# The image only needs the web app; keep datasets and training outputs out of the build context.
+.git/
+.github/
+Dataset/
+data/
+reports/
+docs/
+tests/
+deploy/
+**/__pycache__/
+*.pdf
+trained_plant_disease_model.*
+training_hist.json

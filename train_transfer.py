@@ -31,7 +31,6 @@ import sys
 
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
-import numpy as np
 import tensorflow as tf
 import keras
 
@@ -83,8 +82,8 @@ def collect(args):
     # A class needs enough training examples; FieldPlant-only classes with fewer are dropped.
     train_counts = collections.Counter(it["label"] for it in splits["train"])
     pv_labels = {it["label"] for it in splits["train"] if it["domain"] == "plantvillage"}
-    classes = sorted(l for l, n in train_counts.items() if l in pv_labels or n >= args.min_field_samples)
-    dropped = sorted((l, n) for l, n in train_counts.items() if l not in classes)
+    classes = sorted(label for label, n in train_counts.items() if label in pv_labels or n >= args.min_field_samples)
+    dropped = sorted((label, n) for label, n in train_counts.items() if label not in classes)
     for name in splits:
         splits[name] = [it for it in splits[name] if it["label"] in classes or name == "test"]
     return splits, classes, dropped

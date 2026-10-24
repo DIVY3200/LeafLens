@@ -1,0 +1,12 @@
+# Web app. TensorFlow currently supports Python 3.9-3.13.
+tensorflow>=2.16
+flask>=3.0
+pillow
+numpy
+cryptography  # only needed for `app.py --https`
+
+# Training and evaluation scripts
+matplotlib
+seaborn
+scikit-learn
+opencv-python

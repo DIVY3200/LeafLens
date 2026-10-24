@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 validation_set = tf.keras.utils.image_dataset_from_directory(
-    'valid',
+    'Dataset/old/valid',
     labels="inferred",
     label_mode="categorical",
     class_names=None,
@@ -21,22 +21,32 @@ validation_set = tf.keras.utils.image_dataset_from_directory(
 class_name = validation_set.class_names
 print(class_name)
 
+# Loading Model
 cnn = tf.keras.models.load_model('trained_plant_disease_model.keras')
+# model.summary()
 
-image_path = 'test/CornCommonRust2.JPG'
-# Reading an image in default mode
+# Visualizing Single Image of Test set
+image_path = 'Dataset/old/test/CornCommonRust2.JPG'
+
+# Reading an image
 img = cv2.imread(image_path)
-img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # Convert BGR image into RGB
+
+# Displaying Image
 plt.imshow(img)
 plt.title('Test Image')
-plt.xticks([])
-plt.yticks([])
+plt.xticks([])  # Remove X-axis
+plt.yticks([])  # Remove Y-axis
 plt.show()
 
+# Testing Model
 image = tf.keras.preprocessing.image.load_img(image_path, target_size=(128, 128))
 input_arr = tf.keras.preprocessing.image.img_to_array(image)
+# print(input_arr.shape)
 input_arr = np.array([input_arr])  # Convert single image to a batch.
+# print(input_arr.shape)
 predictions = cnn.predict(input_arr)
+# print(predictions, predictions.shape)
 
 result_index = np.argmax(predictions)
 print(result_index)

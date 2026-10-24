@@ -1,5 +1,7 @@
 # LeafLens: Plant Disease Detection
 
+[![CI/CD](https://github.com/DIVY3200/LeafLens/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/DIVY3200/LeafLens/actions/workflows/ci-cd.yml)
+
 Point your phone or laptop camera at a leaf and LeafLens tells you what's wrong with it, how sure it is, and what to do about it.
 
 The project follows **Moupojou et al., "FieldPlant: A Dataset of Field Plant Images for Plant Disease Detection and Classification With Deep Learning"** (IEEE Access, 2023). That paper shows that models trained on lab photos (PlantVillage) fail on photos taken in real fields. LeafLens reproduces the finding and fixes it the way the paper suggests: an ImageNet-pretrained MobileNetV2 trained on lab **and** field photos. It is right on **86.1% of held-out field photos** (the original model: 12.8%) and **96.2% of held-out lab photos**.
@@ -136,6 +138,38 @@ python app.py --host 0.0.0.0 --https
 
 On a phone connected to the same Wi-Fi, open `https://<your-computer's-IP>:5000` (the terminal prints it), accept the certificate warning and allow camera access. If Windows Firewall asks, allow Python on private networks. Without `--https` the page still works, and the camera button falls back to the phone's own camera app.
 
+## CI/CD
+
+Every push and pull request runs [the CI/CD workflow](.github/workflows/ci-cd.yml) on GitHub Actions:
+
+1. **Lint and test.** `ruff` checks the code and `pytest` runs 83 tests: the web API (including bad and oversized uploads), phone-photo rotation, the leak-free splits, both FieldPlant download formats, the training helpers, and both shipped models against their cards. The tests use tiny stand-in models and generated photos, so they need neither the datasets nor a GPU.
+2. **Build and smoke-test the Docker image.** The app is started in its production container (gunicorn) and must answer `/api/health` and diagnose a photo.
+3. **Deploy.** On pushes to `main`, the app is published to a Hugging Face Space, which serves it over HTTPS so the live camera works on any phone.
+
+Run the same checks locally:
+
+```bash
+pip install -r requirements-dev.txt     # Linux; on Windows install pytest and ruff next to requirements.txt
+ruff check .
+pytest
+```
+
+Run the production container locally (needs Docker):
+
+```bash
+docker build -t leaflens .
+docker run -p 7860:7860 leaflens         # http://localhost:7860
+```
+
+To turn on deployment, create a Hugging Face access token with write permission, then in the GitHub repository open **Settings > Secrets and variables > Actions** and add:
+
+| Kind | Name | Value |
+|---|---|---|
+| Secret | `HF_TOKEN` | the Hugging Face token |
+| Variable | `HF_SPACE` | `<your-hf-username>/leaflens` |
+
+The first deploy creates the Space. Until `HF_SPACE` is set, the deploy job is skipped and CI still runs. `python deploy/deploy_space.py <user>/leaflens --dry-run` lists what gets uploaded.
+
 ## How it works
 
 ```
@@ -189,6 +223,10 @@ train_plant_diseases.py        quick visual check of the original model on one i
 trained_plant_disease_model.keras / .json    original CNN and its card
 models/leaflens_mobilenetv2.keras / .json   the field-trained MobileNetV2 the app uses, and its card
 reports/<model>/               learning curves, classification report, FieldPlant confusion matrix
+tests/                         pytest suite (runs in CI)
+Dockerfile, requirements-deploy.txt          production container for the web app
+deploy/                        Hugging Face Space README and upload script (used by CD)
+.github/workflows/ci-cd.yml    lint, test, Docker smoke test and deploy
 ```
 
 ## Limitations
