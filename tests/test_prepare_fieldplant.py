@@ -17,6 +17,7 @@ def read_manifest(folder):
         return list(csv.DictReader(f))
 
 
+@pytest.mark.integration
 def test_class_folder_download_becomes_256px_squares(tmp_path, monkeypatch):
     source = tmp_path / "FieldPlant"
     for split, fp_class, name, size in [
@@ -35,6 +36,7 @@ def test_class_folder_download_becomes_256px_squares(tmp_path, monkeypatch):
         assert Image.open(out / row["path"]).size == (256, 256)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("mode", ["square", "box"])
 def test_yolo_export_is_cut_into_one_image_per_leaf(tmp_path, monkeypatch, mode):
     source = tmp_path / "yolo"
@@ -53,6 +55,7 @@ def test_yolo_export_is_cut_into_one_image_per_leaf(tmp_path, monkeypatch, mode)
         assert Image.open(out / row["path"]).size == (256, 256)
 
 
+@pytest.mark.unit
 def test_square_crops_stay_inside_the_photo():
     left, top, right, bottom = prepare_fieldplant.square_box(cx=10, cy=10, w=50, h=20, width=100, height=80, margin=0)
     assert (left, top) == (0, 0)

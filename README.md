@@ -141,23 +141,37 @@ python app.py --host 0.0.0.0 --https
 
 On a phone connected to the same Wi-Fi, open `https://<your-computer's-IP>:5000` (the terminal prints it), accept the certificate warning and allow camera access. If Windows Firewall asks, allow Python on private networks. Without `--https` the page still works, and the camera button falls back to the phone's own camera app.
 
-## CI/CD
+## Testing and CI/CD
 
-Every push and pull request runs [the CI workflow](.github/workflows/ci-cd.yml) on GitHub Actions:
+### Test levels
 
-1. **Lint and test.** `ruff` checks the code and `pytest` runs 89 tests: the web API (including bad and oversized uploads), phone-photo rotation, the leak-free splits, both FieldPlant download formats, the training helpers, the TensorFlow Lite export, and the shipped models against their cards. The tests use tiny stand-in models and generated photos, so they need neither the datasets nor a GPU.
-2. **Build and smoke-test the Docker image.** The production container (gunicorn) must answer `/api/health`, diagnose a 12-megapixel photo, and stay under 400 MB of memory, so it keeps fitting Render's free 512 MB instance.
-3. **Deploy.** [Render](https://render.com) redeploys `main` once both checks pass (`autoDeployTrigger: checksPass` in [render.yaml](render.yaml)).
+Every test is tagged with its level (pytest markers; an untagged test fails the run), and CI runs each level as its own step. The tests use tiny stand-in models and generated photos, so they need neither the datasets nor a GPU.
 
-The deployed server runs the TensorFlow Lite export of the model on [LiteRT](https://pypi.org/project/ai-edge-litert/) instead of full TensorFlow: about 80 MB of memory instead of 430 MB and a 0.5-second start, with the same answers (tested on 93 real photos and in CI).
-
-Run the same checks locally:
+| Level | What it checks | Where | Tests |
+|---|---|---|---|
+| Static analysis | Syntax errors, undefined names, unused code (`ruff`) | whole repo | – |
+| **Unit** | Leak-free grouping and splits, FieldPlant label mapping, every disease guide is complete, image resize identical to TensorFlow's, class weights, training history | `tests/test_datasets.py`, `test_knowledge.py`, `test_train_transfer.py` and parts of others | 68 |
+| **Integration** | The web API end to end with a real model (bad and oversized uploads too), phone-photo rotation, both FieldPlant download formats through the prep script, TensorFlow Lite conversion | `tests/test_app.py`, `test_classifier.py`, `test_prepare_fieldplant.py` | 16 |
+| **Model regression** | The shipped models load and match their cards; the deployed `.tflite` gives the same answers as the trained `.keras` | `tests/test_shipped_models.py` | 5 |
+| **System (smoke)** | The production Docker container starts, answers `/api/health` and diagnoses a 12-megapixel photo | CI `docker` job | – |
+| **Non-functional** | The running container stays under 400 MB, so it fits Render's free 512 MB instance | CI `docker` job | – |
 
 ```bash
 pip install -r requirements-dev.txt     # Linux; on Windows install pytest and ruff next to requirements.txt
 ruff check .
-pytest
+pytest                                  # all 89
+pytest -m unit                          # or: -m integration, -m regression
 ```
+
+### Pipeline
+
+Every push and pull request runs [the workflow](.github/workflows/ci-cd.yml) on GitHub Actions:
+
+1. **Lint and test:** `ruff`, then the unit, integration and model regression tests as separate steps.
+2. **Build and smoke-test the Docker image:** the system and memory checks above.
+3. **Deploy:** [Render](https://render.com) redeploys `main` once both jobs pass (`autoDeployTrigger: checksPass` in [render.yaml](render.yaml)), usually about 10 minutes after the push. `/api/health` reports which commit is live.
+
+The deployed server runs the TensorFlow Lite export of the model on [LiteRT](https://pypi.org/project/ai-edge-litert/) instead of full TensorFlow: about 80 MB of memory instead of 430 MB and a 0.5-second start, with the same answers (tested on 93 real photos and in CI).
 
 Run the production container locally (needs Docker):
 
@@ -227,7 +241,7 @@ train_plant_diseases.py        quick visual check of the original model on one i
 trained_plant_disease_model.keras / .json    original CNN and its card
 models/leaflens_mobilenetv2.keras / .tflite / .json   the field-trained MobileNetV2 (Keras and TensorFlow Lite) and its card
 reports/<model>/               learning curves, classification report, FieldPlant confusion matrix
-tests/                         pytest suite (runs in CI)
+tests/                         unit, integration and model regression tests (pytest, run in CI)
 export_tflite.py               converts a .keras model to TensorFlow Lite for the server
 Dockerfile, requirements-deploy.txt          production container for the web app (LiteRT, no TensorFlow)
 render.yaml                    Render Blueprint: free web service, deployed after CI passes

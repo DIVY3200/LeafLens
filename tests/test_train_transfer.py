@@ -5,6 +5,8 @@ import pytest
 
 import train_transfer
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def datasets(tmp_path):

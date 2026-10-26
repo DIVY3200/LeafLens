@@ -1,7 +1,12 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-ra"
+addopts = "-ra --strict-markers"
+markers = [
+    "unit: one function or module in isolation (no model loaded)",
+    "integration: components working together, e.g. the web API with a real model",
+    "regression: the shipped models still load, match their cards and agree with each other",
+]
 
 [tool.ruff]
 line-length = 120

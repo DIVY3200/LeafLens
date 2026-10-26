@@ -8,6 +8,16 @@ from PIL import Image
 
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
+LEVELS = {"unit", "integration", "regression"}
+
+
+def pytest_collection_modifyitems(items):
+    """Every test must say which level it belongs to (see the markers in pyproject.toml)."""
+    untagged = [item.nodeid for item in items if not LEVELS & {mark.name for mark in item.iter_markers()}]
+    if untagged:
+        raise pytest.UsageError(f"Tag these tests with unit, integration or regression: {untagged}")
+
+
 CARD_CLASSES = ["Cassava___Mosaic_disease", "Corn_(maize)___Stripe", "Tomato___healthy"]
 
 

@@ -1,6 +1,10 @@
+import pytest
+
 from plant_disease.datasets import (FIELDPLANT_TO_LABEL, fieldplant_photo_group, has_equivalent, is_correct,
                                     plantvillage_leaf_id, read_fieldplant_manifest, scan_plantvillage, split_of)
 from plant_disease.knowledge import PLANTVILLAGE_CLASSES
+
+pytestmark = pytest.mark.unit
 
 UUID = "0114f7b3-7f56-4bef-aa47-7a82da142d4b"
 

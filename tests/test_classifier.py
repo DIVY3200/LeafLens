@@ -15,17 +15,20 @@ def classifier(carded_model):
     return PlantDiseaseClassifier(carded_model)
 
 
+@pytest.mark.integration
 def test_a_model_without_a_card_uses_the_original_38_classes(legacy_model):
     clf = PlantDiseaseClassifier(legacy_model)
     assert clf.classes == PLANTVILLAGE_CLASSES
     assert clf.card == {}
 
 
+@pytest.mark.integration
 def test_the_card_supplies_class_names(classifier, carded_model):
     assert classifier.classes == CARD_CLASSES
     assert model_card(carded_model)["name"] == "Tiny test model"
 
 
+@pytest.mark.integration
 def test_a_card_that_disagrees_with_the_model_is_rejected(tmp_path, legacy_model):
     shutil.copy(legacy_model, tmp_path / "broken.keras")
     (tmp_path / "broken.json").write_text(json.dumps({"classes": ["A___b", "C___d"]}))
@@ -33,6 +36,7 @@ def test_a_card_that_disagrees_with_the_model_is_rejected(tmp_path, legacy_model
         PlantDiseaseClassifier(str(tmp_path / "broken.keras"))
 
 
+@pytest.mark.integration
 def test_photos_are_centre_cropped_to_the_model_input(classifier, photo):
     pixels = classifier.preprocess(photo(size=(640, 360)))
     assert pixels.shape == (32, 32, 3)
@@ -40,6 +44,7 @@ def test_photos_are_centre_cropped_to_the_model_input(classifier, photo):
     assert 0 <= pixels.min() and pixels.max() <= 255
 
 
+@pytest.mark.integration
 def test_phone_photos_are_turned_upright_using_exif(classifier, photo):
     # Stored with the dark half on the left, tagged "rotate 90 degrees clockwise to display".
     pixels = classifier.preprocess(photo(size=(200, 200), split=True, exif_orientation=6))
@@ -49,6 +54,7 @@ def test_phone_photos_are_turned_upright_using_exif(classifier, photo):
     assert abs(left - right) < 20
 
 
+@pytest.mark.integration
 def test_predictions_are_ranked_and_come_with_a_guide(classifier, photo):
     result = classifier.predict(photo(), top_k=3)
     confidences = [match["confidence"] for match in result["top"]]
@@ -61,6 +67,7 @@ def test_predictions_are_ranked_and_come_with_a_guide(classifier, photo):
     assert result["inference_ms"] >= 0
 
 
+@pytest.mark.unit
 def test_numpy_resize_matches_the_tensorflow_resize_used_in_training():
     tf = pytest.importorskip("tensorflow")
     pixels = np.random.default_rng(0).uniform(0, 255, (256, 256, 3)).astype(np.float32)
@@ -69,6 +76,7 @@ def test_numpy_resize_matches_the_tensorflow_resize_used_in_training():
         np.testing.assert_allclose(resize_bilinear(pixels, size), expected, atol=1e-3)
 
 
+@pytest.mark.integration
 def test_the_tflite_export_gives_the_same_answers(carded_model, lite_model, photo):
     lite = PlantDiseaseClassifier(lite_model)
     assert lite.classes == CARD_CLASSES  # the .json card is shared by file name

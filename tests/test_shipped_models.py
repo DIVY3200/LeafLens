@@ -7,6 +7,8 @@ from app import default_model
 from plant_disease.classifier import PlantDiseaseClassifier
 from plant_disease.knowledge import KNOWLEDGE
 
+pytestmark = pytest.mark.regression
+
 ROOT = Path(__file__).resolve().parent.parent
 MODELS = {
     "models/leaflens_mobilenetv2.tflite": dict(image_size=(224, 224), classes=47),

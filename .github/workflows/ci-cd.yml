@@ -27,10 +27,14 @@ jobs:
           cache-dependency-path: requirements-*.txt
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
-      - name: Lint
+      - name: Lint (static analysis)
         run: ruff check .
-      - name: Test
-        run: pytest
+      - name: Unit tests
+        run: pytest -m unit
+      - name: Integration tests
+        run: pytest -m integration
+      - name: Model regression tests
+        run: pytest -m regression
 
   docker:
     name: Build and smoke-test the Docker image

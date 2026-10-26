@@ -2,6 +2,8 @@ import pytest
 
 from plant_disease.knowledge import FIELDPLANT, KNOWLEDGE, PLANTVILLAGE_CLASSES, describe, supported_plants
 
+pytestmark = pytest.mark.unit
+
 KEYS = {"plant", "name", "type", "cause", "summary", "symptoms", "treatment", "prevention"}
 
 

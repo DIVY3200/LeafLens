@@ -6,6 +6,8 @@ from app import create_app
 
 from conftest import CARD_CLASSES
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture(scope="module")
 def client(carded_model):
